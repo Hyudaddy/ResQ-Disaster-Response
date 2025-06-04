@@ -1,348 +1,177 @@
-import React, { useState } from 'react';
-import { Users, Search, Filter, Edit, Trash, Shield, UserPlus, X } from 'lucide-react';
-import Card from '../../components/common/Card';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { User } from '../../types/auth.types';
 import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
-import Select from '../../components/common/Select';
-import { users } from '../../data/mockData';
-import { UserRole } from '../../types/auth.types';
+import { Trash2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const UserManagement: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole | 'all'>('all');
-  const [showAddUser, setShowAddUser] = useState(false);
-  const [newUser, setNewUser] = useState({
-    name: '',
-    email: '',
-    role: 'public' as UserRole,
-    department: '',
-    jurisdiction: '',
-  });
-  
-  // Filter users based on search and role
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      searchQuery === '' || 
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    
-    return matchesSearch && matchesRole;
-  });
-  
-  // Role colors
-  const getRoleBadgeClass = (role: UserRole) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-primary-500/20 text-primary-500';
-      case 'responder':
-        return 'bg-warning-500/20 text-warning-500';
-      case 'public':
-        return 'bg-info-500/20 text-info-500';
-      default:
-        return 'bg-dark-700 text-dark-300';
-    }
-  };
-  
-  // Handle search input
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
-  
-  // Handle role filter
-  const handleRoleFilter = (role: UserRole | 'all') => {
-    setSelectedRole(role);
-  };
-  
-  // Handle new user input change
-  const handleNewUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setNewUser(prev => ({ ...prev, [name]: value }));
-  };
-  
-  // Handle add user
-  const handleAddUser = () => {
-    if (!newUser.name || !newUser.email) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    
-    // In a real app, this would make an API call
-    const user = {
-      id: (users.length + 1).toString(),
-      ...newUser,
-      createdAt: new Date().toISOString(),
-    };
-    
-    users.push(user);
-    toast.success('User added successfully');
-    setShowAddUser(false);
-    setNewUser({
-      name: '',
-      email: '',
-      role: 'public',
-      department: '',
-      jurisdiction: '',
-    });
-  };
-  
-  // Handle edit user
-  const handleEditUser = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      setNewUser({
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        department: user.department || '',
-        jurisdiction: user.jurisdiction || '',
-      });
-      setShowAddUser(true);
-    }
-  };
-  
-  // Handle delete user
-  const handleDeleteUser = (userId: string) => {
-    const index = users.findIndex(u => u.id === userId);
-    if (index !== -1) {
-      users.splice(index, 1);
-      toast.success('User deleted successfully');
+  const { user } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Get current user's email
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+
+      // Add email to the current user's profile
+      const usersWithEmail = data.map(profile => ({
+        ...profile,
+        email: currentUser && profile.id === currentUser.id ? currentUser.email : 'N/A'
+      }));
+
+      setUsers(usersWithEmail);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  return (
-    <div>
-      <div className="mb-6">
-        <div className="flex items-center mb-2">
-          <Users size={24} className="text-primary-500 mr-2" />
-          <h1 className="text-2xl font-bold text-white">User Management</h1>
-        </div>
-        <p className="text-dark-300">
-          Manage user accounts, roles, and permissions
-        </p>
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // Delete from profiles first
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      // Then delete from auth
+      const { error: authError } = await supabase.auth.signOut();
+      if (authError) throw authError;
+
+      toast.success('User deleted successfully');
+      fetchUsers(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Failed to delete user');
+    }
+  };
+
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="p-4">
+        <p className="text-red-500">You do not have permission to access this page.</p>
       </div>
-      
-      <Card className="mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <Input
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={handleSearch}
-              leftIcon={<Search size={18} />}
-              className="mb-0"
-            />
-          </div>
-          
-          <div className="flex space-x-2">
-            <Button
-              variant={selectedRole === 'all' ? 'primary' : 'secondary'}
-              onClick={() => handleRoleFilter('all')}
-            >
-              All
-            </Button>
-            <Button
-              variant={selectedRole === 'admin' ? 'primary' : 'secondary'}
-              onClick={() => handleRoleFilter('admin')}
-            >
-              Admins
-            </Button>
-            <Button
-              variant={selectedRole === 'responder' ? 'primary' : 'secondary'}
-              onClick={() => handleRoleFilter('responder')}
-            >
-              Responders
-            </Button>
-            <Button
-              variant={selectedRole === 'public' ? 'primary' : 'secondary'}
-              onClick={() => handleRoleFilter('public')}
-            >
-              Public
-            </Button>
-          </div>
-        </div>
-      </Card>
-      
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">Users</h2>
+    );
+  }
+
+  return (
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-light-900 dark:text-white">User Management</h1>
         <Button
+          variant="primary"
           leftIcon={<UserPlus size={16} />}
-          onClick={() => setShowAddUser(true)}
+          onClick={() => {/* TODO: Implement add user modal */}}
         >
           Add User
         </Button>
       </div>
-      
-      {/* Add/Edit User Modal */}
-      {showAddUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">
-                {newUser.email ? 'Edit User' : 'Add New User'}
-              </h3>
-              <button
-                className="text-dark-400 hover:text-white transition-colors"
-                onClick={() => setShowAddUser(false)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <Input
-              label="Full Name"
-              name="name"
-              value={newUser.name}
-              onChange={handleNewUserChange}
-              placeholder="Enter user's full name"
-            />
-            
-            <Input
-              label="Email"
-              name="email"
-              type="email"
-              value={newUser.email}
-              onChange={handleNewUserChange}
-              placeholder="Enter user's email"
-            />
-            
-            <Select
-              label="Role"
-              name="role"
-              value={newUser.role}
-              onChange={handleNewUserChange}
-              options={[
-                { value: 'public', label: 'Public User' },
-                { value: 'responder', label: 'Responder' },
-                { value: 'admin', label: 'Administrator' },
-              ]}
-            />
-            
-            {(newUser.role === 'responder' || newUser.role === 'admin') && (
-              <>
-                <Input
-                  label="Department"
-                  name="department"
-                  value={newUser.department}
-                  onChange={handleNewUserChange}
-                  placeholder="Enter department"
-                />
-                
-                <Input
-                  label="Jurisdiction"
-                  name="jurisdiction"
-                  value={newUser.jurisdiction}
-                  onChange={handleNewUserChange}
-                  placeholder="Enter jurisdiction"
-                />
-              </>
-            )}
-            
-            <div className="flex justify-end gap-3 mt-6">
-              <Button
-                variant="ghost"
-                onClick={() => setShowAddUser(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddUser}
-              >
-                {newUser.email ? 'Update User' : 'Add User'}
-              </Button>
-            </div>
-          </Card>
+
+      {isLoading ? (
+        <div className="text-center py-8">
+          <p className="text-light-600 dark:text-dark-300">Loading users...</p>
         </div>
-      )}
-      
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-dark-800 text-left">
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Name</th>
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Email</th>
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Role</th>
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Department</th>
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Last Login</th>
-              <th className="px-4 py-3 text-dark-300 font-medium text-sm">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-dark-800">
-            {filteredUsers.map((user) => (
-              <tr key={user.id} className="bg-dark-900 hover:bg-dark-800 transition">
-                <td className="px-4 py-3 text-white">
-                  <div className="flex items-center">
-                    {user.avatarUrl ? (
-                      <img 
-                        src={user.avatarUrl} 
-                        alt={user.name} 
-                        className="w-8 h-8 rounded-full mr-3"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-dark-700 flex items-center justify-center mr-3">
-                        <span className="text-dark-300 text-sm">
-                          {user.name.charAt(0).toUpperCase()}
-                        </span>
+      ) : (
+        <div className="bg-white dark:bg-dark-900 rounded-lg shadow border border-light-200 dark:border-dark-800">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-light-200 dark:border-dark-800">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    Jurisdiction
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-light-500 dark:text-dark-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-light-200 dark:divide-dark-800">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-light-50 dark:hover:bg-dark-800">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-primary-500 text-white flex items-center justify-center">
+                          {user.full_name.charAt(0)}
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-light-900 dark:text-white">
+                            {user.full_name}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    {user.name}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-dark-200">{user.email}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeClass(user.role)}`}>
-                    {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-dark-300">
-                  {user.department || '-'}
-                </td>
-                <td className="px-4 py-3 text-dark-300">
-                  {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex space-x-2">
-                    <button
-                      className="p-1 text-dark-300 hover:text-primary-500 transition"
-                      onClick={() => handleEditUser(user.id)}
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      className="p-1 text-dark-300 hover:text-danger-500 transition"
-                      onClick={() => handleDeleteUser(user.id)}
-                    >
-                      <Trash size={16} />
-                    </button>
-                    {user.role !== 'admin' && (
-                      <button
-                        className="p-1 text-dark-300 hover:text-warning-500 transition"
-                        onClick={() => toast(`Assign role for ${user.name}`, { icon: '🔑' })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <p className="text-sm text-light-600 dark:text-dark-300">{user.email}</p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                          user.role === 'responder' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <p className="text-sm text-light-600 dark:text-dark-300">
+                        {user.department || 'N/A'}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <p className="text-sm text-light-600 dark:text-dark-300">
+                        {user.jurisdiction || 'N/A'}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={() => handleDeleteUser(user.id)}
                       >
-                        <Shield size={16} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      
-      {filteredUsers.length === 0 && (
-        <div className="bg-dark-800 rounded-lg p-8 text-center mt-4">
-          <Users size={48} className="mx-auto mb-4 text-dark-500" />
-          <h3 className="text-xl font-semibold text-white mb-2">No Users Found</h3>
-          <p className="text-dark-300 mb-6">There are no users matching your current filters.</p>
-          <Button onClick={() => {
-            setSearchQuery('');
-            setSelectedRole('all');
-          }}>
-            Reset Filters
-          </Button>
+                        <Trash2 size={16} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

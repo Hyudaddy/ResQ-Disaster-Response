@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Bell, MapPin, Calendar, Clock } from 'lucide-react';
+import { ShieldAlert, Bell, MapPin, Calendar, Clock, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -9,10 +9,15 @@ import IncidentSeverityBadge from '../../components/common/IncidentSeverityBadge
 import { formatDistanceToNow } from 'date-fns';
 
 const ResponderAlerts: React.FC = () => {
-  const { incidents } = useIncidents();
+  const { incidents, loading, error, refreshIncidents } = useIncidents();
   const navigate = useNavigate();
   const [newAlerts, setNewAlerts] = useState<string[]>([]);
   
+  // Refresh incidents when component mounts
+  useEffect(() => {
+    refreshIncidents();
+  }, []);
+
   // Filter for active incidents (not resolved or closed)
   const activeIncidents = incidents.filter(
     i => ['reported', 'acknowledged'].includes(i.status)
@@ -43,7 +48,7 @@ const ResponderAlerts: React.FC = () => {
     }, 10000);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [activeIncidents]);
 
   const handleViewIncident = (id: string) => {
     // Remove from new alerts
@@ -52,12 +57,45 @@ const ResponderAlerts: React.FC = () => {
     navigate(`/incidents/${id}`);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-6">
+        <div className="flex flex-col items-center justify-center text-center">
+          <ShieldAlert className="w-12 h-12 text-danger-500 mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">Failed to Load Alerts</h3>
+          <p className="text-dark-300 mb-4">{error}</p>
+          <Button onClick={refreshIncidents} leftIcon={<RefreshCw size={16} />}>
+            Try Again
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div>
       <div className="mb-6">
-        <div className="flex items-center mb-2">
-          <ShieldAlert size={24} className="text-primary-500 mr-2" />
-          <h1 className="text-2xl font-bold text-white">Active Alerts</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center">
+            <ShieldAlert size={24} className="text-primary-500 mr-2" />
+            <h1 className="text-2xl font-bold text-white">Active Alerts</h1>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={refreshIncidents}
+            leftIcon={<RefreshCw size={16} />}
+          >
+            Refresh
+          </Button>
         </div>
         <p className="text-dark-300">
           Monitor and respond to active incidents requiring attention
@@ -107,13 +145,15 @@ const ResponderAlerts: React.FC = () => {
                       <div className="flex items-center">
                         <MapPin size={14} className="mr-1" />
                         <span className="truncate max-w-[200px]">
-                          {incident.location.address || `${incident.location.latitude.toFixed(4)}, ${incident.location.longitude.toFixed(4)}`}
+                          {`${incident.location.municipality}, ${incident.location.barangay}${
+                            incident.location.purok ? `, ${incident.location.purok}` : ''
+                          }`}
                         </span>
                       </div>
                       
                       <div className="flex items-center">
                         <Clock size={14} className="mr-1" />
-                        <span>{formatDistanceToNow(new Date(incident.reportTime), { addSuffix: true })}</span>
+                        <span>{formatDistanceToNow(new Date(incident.created_at), { addSuffix: true })}</span>
                       </div>
                     </div>
                   </div>
@@ -163,7 +203,7 @@ const ResponderAlerts: React.FC = () => {
                     <IncidentSeverityBadge severity={incident.severity} />
                     <div className="text-xs text-dark-400">
                       <Calendar size={12} className="inline mr-1" />
-                      {new Date(incident.reportTime).toLocaleDateString()}
+                      {new Date(incident.created_at).toLocaleDateString()}
                     </div>
                   </div>
                   

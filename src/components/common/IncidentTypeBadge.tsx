@@ -1,10 +1,10 @@
 import React from 'react';
 import Badge from './Badge';
 import { IncidentType } from '../../types/incident.types';
-import { AlertTriangle, Flame, Droplet, Waves, Heart, Construction, HelpCircle } from 'lucide-react';
+import { AlertTriangle, Flame, Droplet, Waves, Wind, Heart, Construction, HelpCircle } from 'lucide-react';
 
 interface IncidentTypeBadgeProps {
-  type: IncidentType;
+  type: IncidentType | { name: IncidentType };
   className?: string;
   showIcon?: boolean;
 }
@@ -14,67 +14,66 @@ const IncidentTypeBadge: React.FC<IncidentTypeBadgeProps> = ({
   className = '',
   showIcon = true
 }) => {
-  const getTypeConfig = (type: IncidentType) => {
-    switch (type) {
+  const typeName = typeof type === 'string' ? type : type.name;
+
+  const getTypeInfo = () => {
+    switch (typeName) {
       case 'fire':
-        return { 
-          variant: 'danger', 
+        return {
           label: 'Fire',
-          icon: <Flame size={14} />
+          icon: Flame,
+          color: 'bg-danger-500/20 text-danger-500 border-danger-500/30'
         };
       case 'flood':
-        return { 
-          variant: 'info', 
+        return {
           label: 'Flood',
-          icon: <Droplet size={14} />
+          icon: Droplet,
+          color: 'bg-info-500/20 text-info-500 border-info-500/30'
         };
       case 'earthquake':
-        return { 
-          variant: 'warning', 
+        return {
           label: 'Earthquake',
-          icon: <AlertTriangle size={14} />
+          icon: Waves,
+          color: 'bg-warning-500/20 text-warning-500 border-warning-500/30'
         };
       case 'storm':
-        return { 
-          variant: 'info', 
+        return {
           label: 'Storm',
-          icon: <Waves size={14} />
+          icon: Wind,
+          color: 'bg-info-500/20 text-info-500 border-info-500/30'
         };
       case 'medical':
-        return { 
-          variant: 'primary', 
+        return {
           label: 'Medical',
-          icon: <Heart size={14} />
+          icon: Heart,
+          color: 'bg-primary-500/20 text-primary-500 border-primary-500/30'
         };
       case 'infrastructure':
-        return { 
-          variant: 'warning', 
+        return {
           label: 'Infrastructure',
-          icon: <Construction size={14} />
+          icon: Construction,
+          color: 'bg-warning-500/20 text-warning-500 border-warning-500/30'
         };
       case 'other':
-        return { 
-          variant: 'default', 
+        return {
           label: 'Other',
-          icon: <HelpCircle size={14} />
+          icon: HelpCircle,
+          color: 'bg-dark-700 text-dark-300 border-dark-600'
         };
       default:
-        return { 
-          variant: 'default', 
+        return {
           label: 'Unknown',
-          icon: <HelpCircle size={14} />
+          icon: AlertTriangle,
+          color: 'bg-dark-700 text-dark-300 border-dark-600'
         };
     }
   };
 
-  const { variant, label, icon } = getTypeConfig(type);
+  const { label, icon: Icon, color } = getTypeInfo();
 
   return (
-    <Badge 
-      variant={variant as any} 
-      className={className}
-    >
-      {showIcon && <span className="mr-1">{icon}</span>}
+    <Badge className={`${color} ${className}`}>
+      {showIcon && <Icon size={14} className="mr-1" />}
       {label}
     </Badge>
   );

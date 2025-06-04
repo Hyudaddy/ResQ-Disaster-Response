@@ -8,6 +8,37 @@ import ThemeToggle from '../../components/common/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../types/auth.types';
 
+// Department options
+const departmentOptions = [
+  { value: '', label: 'Select Department' },
+  { value: 'BFP', label: 'BFP' },
+  { value: 'PDRRMO', label: 'PDRRMO' },
+  { value: 'MDRRMO', label: 'MDRRMO' },
+  { value: 'NSART', label: 'NSART' },
+  { value: 'SARAS', label: 'SARAS' },
+  { value: 'PETSARAG', label: 'PETSARAG' },
+  { value: 'REDCROSS', label: 'REDCROSS' },
+];
+
+// Municipality options for Agusan del Sur
+const municipalityOptions = [
+  { value: '', label: 'Select Municipality' },
+  { value: 'Bayugan', label: 'Bayugan' },
+  { value: 'Bunawan', label: 'Bunawan' },
+  { value: 'Esperanza', label: 'Esperanza' },
+  { value: 'La Paz', label: 'La Paz' },
+  { value: 'Loreto', label: 'Loreto' },
+  { value: 'Prosperidad', label: 'Prosperidad' },
+  { value: 'Rosario', label: 'Rosario' },
+  { value: 'San Francisco', label: 'San Francisco' },
+  { value: 'San Luis', label: 'San Luis' },
+  { value: 'Santa Josefa', label: 'Santa Josefa' },
+  { value: 'Sibagat', label: 'Sibagat' },
+  { value: 'Talacogon', label: 'Talacogon' },
+  { value: 'Trento', label: 'Trento' },
+  { value: 'Veruela', label: 'Veruela' },
+];
+
 const Register: React.FC = () => {
   const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -19,8 +50,8 @@ const Register: React.FC = () => {
     confirmPassword: '',
     department: '',
     jurisdiction: '',
-    adminCode: '', // New field for admin registration
-    responderCode: '', // New field for responder registration
+    adminCode: '',
+    responderCode: '',
   });
   const [errors, setErrors] = useState({
     name: '',
@@ -30,7 +61,7 @@ const Register: React.FC = () => {
     department: '',
     jurisdiction: '',
     adminCode: '',
-    responderCode: '', // New error field for responder code
+    responderCode: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -73,11 +104,11 @@ const Register: React.FC = () => {
     }
 
     if (selectedRole === 'responder') {
-      if (!formData.department.trim()) {
+      if (!formData.department) {
         newErrors.department = 'Department is required for responders';
         valid = false;
       }
-      if (!formData.jurisdiction.trim()) {
+      if (!formData.jurisdiction) {
         newErrors.jurisdiction = 'Jurisdiction is required for responders';
         valid = false;
       }
@@ -98,11 +129,11 @@ const Register: React.FC = () => {
         newErrors.adminCode = 'Invalid admin code';
         valid = false;
       }
-      if (!formData.department.trim()) {
+      if (!formData.department) {
         newErrors.department = 'Department is required for admins';
         valid = false;
       }
-      if (!formData.jurisdiction.trim()) {
+      if (!formData.jurisdiction) {
         newErrors.jurisdiction = 'Jurisdiction is required for admins';
         valid = false;
       }
@@ -118,6 +149,7 @@ const Register: React.FC = () => {
     if (!validateForm()) return;
     
     try {
+      // Call the register function - navigation is handled within AuthContext
       await register({
         name: formData.name,
         email: formData.email,
@@ -127,9 +159,11 @@ const Register: React.FC = () => {
         department: formData.department,
         jurisdiction: formData.jurisdiction,
       });
-      navigate('/');
+
     } catch (error) {
-      // Error is handled in the auth context
+      // Error is handled and possibly toasted in the auth context
+      console.error('Registration error handled by AuthContext:', error);
+      // Optionally, you could add additional error handling specific to the form here if needed
     }
   };
 
@@ -139,8 +173,8 @@ const Register: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-light-50 dark:bg-dark-950 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-light-50 dark:bg-dark-950 flex flex-col items-center justify-center px-4 py-8">
+      <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center bg-primary-500 text-white h-16 w-16 rounded-lg mb-4">
             <ShieldAlert size={32} />
@@ -202,108 +236,120 @@ const Register: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit}>
-            <Input
-              label="Full Name"
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Enter your full name"
-              leftIcon={<User size={18} />}
-              error={errors.name}
-              required
-            />
-            
-            <Input
-              label="Email"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter your email"
-              leftIcon={<Mail size={18} />}
-              error={errors.email}
-              required
-            />
-            
-            <Input
-              label="Password"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Create a password"
-              leftIcon={<Lock size={18} />}
-              error={errors.password}
-              required
-            />
-            
-            <Input
-              label="Confirm Password"
-              type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              placeholder="Confirm your password"
-              leftIcon={<Lock size={18} />}
-              error={errors.confirmPassword}
-              required
-            />
-
-            {/* Additional fields for responders and admins */}
-            {(selectedRole === 'responder' || selectedRole === 'admin') && (
-              <>
+            {/* Basic Info: Name, Email, Password */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <Input
-                  label="Department"
-                  name="department"
-                  value={formData.department}
+                  label="Full Name"
+                  type="text"
+                  name="name"
+                  value={formData.name}
                   onChange={handleChange}
-                  placeholder="Enter your department"
-                  leftIcon={<Building size={18} />}
-                  error={errors.department}
+                  placeholder="Enter your full name"
+                  leftIcon={<User size={18} />}
+                  error={errors.name}
                   required
                 />
                 
                 <Input
+                  label="Email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Enter your email"
+                  leftIcon={<Mail size={18} />}
+                  error={errors.email}
+                  required
+                />
+              </div>
+
+              <div className="space-y-6">
+                <Input
+                  label="Password"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Create a password"
+                  leftIcon={<Lock size={18} />}
+                  error={errors.password}
+                  showPasswordToggle
+                  showPasswordStrength
+                  required
+                />
+                
+                <Input
+                  label="Confirm Password"
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Confirm your password"
+                  leftIcon={<Lock size={18} />}
+                  error={errors.confirmPassword}
+                  showPasswordToggle
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Additional fields for responders and admins */}
+            {(selectedRole === 'responder' || selectedRole === 'admin') && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <Select
+                  label="Department"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  options={departmentOptions}
+                  error={errors.department}
+                  required
+                  fullWidth
+                />
+                
+                <Select
                   label="Jurisdiction"
                   name="jurisdiction"
                   value={formData.jurisdiction}
                   onChange={handleChange}
-                  placeholder="Enter your jurisdiction"
-                  leftIcon={<MapPin size={18} />}
+                  options={municipalityOptions}
                   error={errors.jurisdiction}
                   required
+                  fullWidth
                 />
-              </>
+              </div>
             )}
 
-            {selectedRole === 'admin' && (
-              <Input
-                label="Admin Code"
-                type="password"
-                name="adminCode"
-                value={formData.adminCode}
-                onChange={handleChange}
-                placeholder="Enter admin code"
-                error={errors.adminCode}
-                required
-              />
-            )}
-
-            {selectedRole === 'responder' && (
-              <Input
-                label="Responder Code"
-                type="password"
-                name="responderCode"
-                value={formData.responderCode}
-                onChange={handleChange}
-                placeholder="Enter responder code"
-                error={errors.responderCode}
-                required
-              />
-            )}
-            
             <div className="mt-6">
+              {selectedRole === 'admin' && (
+                <Input
+                  label="Admin Code"
+                  type="password"
+                  name="adminCode"
+                  value={formData.adminCode}
+                  onChange={handleChange}
+                  placeholder="Enter admin code"
+                  error={errors.adminCode}
+                  required
+                />
+              )}
+
+              {selectedRole === 'responder' && (
+                <Input
+                  label="Responder Code"
+                  type="password"
+                  name="responderCode"
+                  value={formData.responderCode}
+                  onChange={handleChange}
+                  placeholder="Enter responder code"
+                  error={errors.responderCode}
+                  required
+                />
+              )}
+            </div>
+            
+            <div className="mt-8">
               <Button
                 type="submit"
                 fullWidth

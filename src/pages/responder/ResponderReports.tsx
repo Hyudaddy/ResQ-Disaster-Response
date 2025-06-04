@@ -12,7 +12,7 @@ const ResponderReports: React.FC = () => {
   // Resolved incidents for reports
   const resolvedIncidents = incidents.filter(
     i => ['resolved', 'closed'].includes(i.status)
-  ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   
   // Generate a weekly report
   const generateWeeklyReport = () => {
@@ -40,7 +40,8 @@ const ResponderReports: React.FC = () => {
   // Calculate incident distribution by type
   const getIncidentTypeDistribution = () => {
     return incidents.reduce((acc, incident) => {
-      acc[incident.type] = (acc[incident.type] || 0) + 1;
+      const typeName = incident.type?.name || 'Unknown';
+      acc[typeName] = (acc[typeName] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
   };
@@ -142,7 +143,7 @@ const ResponderReports: React.FC = () => {
                 <td className="px-4 py-3 text-white">#{incident.id}</td>
                 <td className="px-4 py-3 text-white">{incident.title}</td>
                 <td className="px-4 py-3">
-                  <span className="capitalize text-dark-200">{incident.type}</span>
+                  <span className="capitalize text-dark-200">{incident.type?.name || 'Unknown'}</span>
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
@@ -154,8 +155,8 @@ const ResponderReports: React.FC = () => {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-dark-300">
-                  {incident.resolvedTime 
-                    ? new Date(incident.resolvedTime).toLocaleDateString() 
+                  {incident.resolved_at 
+                    ? new Date(incident.resolved_at).toLocaleDateString() 
                     : '-'}
                 </td>
                 <td className="px-4 py-3">

@@ -25,6 +25,8 @@ import IncidentStatusBadge from '../../components/common/IncidentStatusBadge';
 import IncidentSeverityBadge from '../../components/common/IncidentSeverityBadge';
 import IncidentForm from '../../components/incidents/IncidentForm';
 import toast from 'react-hot-toast';
+import { IncidentWithDetails, IncidentStatus, ResponderStatus } from '../../types/incident.types';
+import { supabase } from '../../lib/supabase';
 
 const IncidentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -51,21 +53,22 @@ const IncidentDetail: React.FC = () => {
     );
   }
   
-  const isOwner = user?.id === incident.reporterId;
+  const isOwner = user?.id === incident.reporter_id;
   const isResponder = user?.role === 'responder' || user?.role === 'admin';
   const canUpdateStatus = isResponder;
+  const canAddNote = isResponder;
   
-  const handleUpdateStatus = async (newStatus: string) => {
+  const handleUpdateStatus = async (newStatus: IncidentStatus) => {
     if (!canUpdateStatus) return;
     
     setIsLoading(true);
     
     try {
       await updateIncident(incident.id, {
-        status: newStatus as any,
-        resolvedTime: ['resolved', 'closed'].includes(newStatus) 
+        status: newStatus,
+        resolved_at: ['resolved', 'closed'].includes(newStatus) 
           ? new Date().toISOString() 
-          : incident.resolvedTime
+          : incident.resolved_at
       });
       
       toast.success(`Incident status updated to ${newStatus}`);
@@ -76,23 +79,46 @@ const IncidentDetail: React.FC = () => {
     }
   };
 
-  // Handle adding a note
   const handleAddNote = async () => {
-    if (!note.trim()) {
-      toast.error('Please enter a note');
-      return;
-    }
-
+    if (!note.trim()) return;
+    
     setIsLoading(true);
+    
     try {
-      await updateIncident(incident.id, {
-        responderNotes: note
+      // Debug log to check user role and ID
+      console.log('Current user:', {
+        id: user?.id,
+        role: user?.role,
+        email: user?.email
       });
-      toast.success('Note added successfully');
-      setShowNoteModal(false);
+
+      // First, add the responder note to the incident_responders table
+      const { error: responderError } = await supabase
+        .from('incident_responders')
+        .insert([{
+          incident_id: incident.id,
+          responder_id: user!.id,
+          assigned_at: new Date().toISOString(),
+          notes: note,
+          status: 'assigned'
+        }]);
+
+      if (responderError) {
+        console.error('Error details:', responderError);
+        throw responderError;
+      }
+
+      // Then update the incident to trigger a refresh
+      await updateIncident(incident.id, {
+        updated_at: new Date().toISOString()
+      });
+      
       setNote('');
+      setShowNoteModal(false);
+      toast.success('Note added successfully');
     } catch (error) {
-      toast.error('Failed to add note');
+      console.error('Error adding note:', error);
+      toast.error('Failed to add note. Please check your permissions.');
     } finally {
       setIsLoading(false);
     }
@@ -187,6 +213,31 @@ const IncidentDetail: React.FC = () => {
                   <h3 className="text-lg font-semibold text-white mb-3">Incident Details</h3>
                   <p className="text-dark-200 whitespace-pre-line">{incident.description}</p>
                 </div>
+
+                {/* Images */}
+                {incident.images && incident.images.length > 0 && (
+                  <div className="pt-4 border-t border-dark-700">
+                    <h4 className="text-sm font-medium text-dark-300 mb-3">Incident Images</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {incident.images.map((image: any) => (
+                        <div 
+                          key={image.id} 
+                          className="relative aspect-video cursor-pointer group"
+                          onClick={() => viewImage(incident.images.indexOf(image))}
+                        >
+                          <img
+                            src={image.url}
+                            alt={`Incident image ${image.id}`}
+                            className="w-full h-full object-cover rounded-lg transition-transform group-hover:scale-[1.02]"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                            <span className="text-white text-sm">Click to view</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-dark-700">
                   <div>
@@ -194,17 +245,20 @@ const IncidentDetail: React.FC = () => {
                     <div className="flex items-start">
                       <MapPin size={18} className="text-dark-400 mr-2 mt-0.5" />
                       <p className="text-dark-200">
-                        {incident.location.address || (
+                        {incident.location.latitude && incident.location.longitude ? (
                           <>
                             Latitude: {incident.location.latitude.toFixed(6)}<br />
                             Longitude: {incident.location.longitude.toFixed(6)}<br />
-                            {incident.location.municipality && (
-                              <>Municipality: {incident.location.municipality}<br /></>
-                            )}
-                            {incident.location.barangay && (
-                              <>Barangay: {incident.location.barangay}<br /></>
-                            )}
                           </>
+                        ) : null}
+                        {incident.location.municipality && (
+                          <>Municipality: {incident.location.municipality}<br /></>
+                        )}
+                        {incident.location.barangay && (
+                          <>Barangay: {incident.location.barangay}<br /></>
+                        )}
+                        {incident.location.purok && (
+                          <>Purok: {incident.location.purok}</>
                         )}
                       </p>
                     </div>
@@ -214,7 +268,7 @@ const IncidentDetail: React.FC = () => {
                     <h4 className="text-sm font-medium text-dark-300 mb-2">Reported By</h4>
                     <div className="flex items-center">
                       <User size={18} className="text-dark-400 mr-2" />
-                      <p className="text-dark-200">{incident.reporterName}</p>
+                      <p className="text-dark-200">{incident.reporter.full_name}</p>
                     </div>
                   </div>
                   
@@ -224,26 +278,26 @@ const IncidentDetail: React.FC = () => {
                       <Clock size={18} className="text-dark-400 mr-2" />
                       <div>
                         <p className="text-dark-200">
-                          {format(new Date(incident.reportTime), 'PPP p')}
+                          {format(new Date(incident.created_at), 'PPP p')}
                         </p>
                         <p className="text-xs text-dark-400">
-                          {formatDistanceToNow(new Date(incident.reportTime), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(incident.created_at), { addSuffix: true })}
                         </p>
                       </div>
                     </div>
                   </div>
                   
-                  {incident.resolvedTime && (
+                  {incident.resolved_at && (
                     <div>
                       <h4 className="text-sm font-medium text-dark-300 mb-2">Resolved Time</h4>
                       <div className="flex items-center">
                         <CheckCircle size={18} className="text-success-500 mr-2" />
                         <div>
                           <p className="text-dark-200">
-                            {format(new Date(incident.resolvedTime), 'PPP p')}
+                            {format(new Date(incident.resolved_at), 'PPP p')}
                           </p>
                           <p className="text-xs text-dark-400">
-                            {formatDistanceToNow(new Date(incident.resolvedTime), { addSuffix: true })}
+                            {formatDistanceToNow(new Date(incident.resolved_at), { addSuffix: true })}
                           </p>
                         </div>
                       </div>
@@ -251,47 +305,33 @@ const IncidentDetail: React.FC = () => {
                   )}
                 </div>
                 
-                {/* Image gallery */}
-                {incident.images && incident.images.length > 0 && (
+                {/* Responder notes */}
+                {incident.responders && incident.responders.length > 0 && (
                   <div className="pt-4 border-t border-dark-700">
-                    <h4 className="text-sm font-medium text-dark-300 mb-3">Images</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {incident.images.map((image, index) => (
-                        <div 
-                          key={index} 
-                          className="relative h-24 cursor-pointer group overflow-hidden rounded-md"
-                          onClick={() => viewImage(index)}
-                        >
-                          <img 
-                            src={image} 
-                            alt={`Incident ${index + 1}`}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-dark-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Image size={20} className="text-white" />
+                    <h4 className="text-sm font-medium text-dark-300 mb-3">Responder Notes</h4>
+                    <div className="space-y-3">
+                      {incident.responders.map((responder, index) => (
+                        <div key={index} className="bg-dark-900 rounded-md p-3 border border-dark-700">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-primary-500/10 flex items-center justify-center">
+                                <User size={16} className="text-primary-500" />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-sm font-medium text-white">
+                                  {responder.responder.full_name}
+                                </p>
+                                <span className="text-xs text-dark-400">
+                                  {formatDistanceToNow(new Date(responder.assigned_at), { addSuffix: true })}
+                                </span>
+                              </div>
+                              <p className="text-dark-200 whitespace-pre-line text-sm">{responder.notes}</p>
+                            </div>
                           </div>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Responder notes */}
-                {incident.responderNotes && (
-                  <div className="pt-4 border-t border-dark-700">
-                    <h4 className="text-sm font-medium text-dark-300 mb-2">Responder Notes</h4>
-                    <div className="bg-dark-900 rounded-md p-3 border border-dark-700">
-                      <p className="text-dark-200 whitespace-pre-line">{incident.responderNotes}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Admin notes */}
-                {incident.adminNotes && user?.role === 'admin' && (
-                  <div className="pt-4 border-t border-dark-700">
-                    <h4 className="text-sm font-medium text-dark-300 mb-2">Admin Notes</h4>
-                    <div className="bg-dark-900 rounded-md p-3 border border-primary-500/30">
-                      <p className="text-dark-200 whitespace-pre-line">{incident.adminNotes}</p>
                     </div>
                   </div>
                 )}
@@ -300,57 +340,95 @@ const IncidentDetail: React.FC = () => {
             
             {/* Sidebar actions and info */}
             <div className="space-y-6">
-              {/* Status update (for responders only) */}
+              {/* Status update (for responders and admins) */}
               {canUpdateStatus && (
                 <Card title="Update Status">
-                  <div className="space-y-3">
-                    <p className="text-sm text-dark-300 mb-4">
-                      Change the current status of this incident:
+                  <div className="space-y-4">
+                    {/* Status flow indicator */}
+                    <div className="relative">
+                      {/* Progress bar background */}
+                      <div className="absolute top-3 left-0 right-0 h-0.5 bg-dark-700"></div>
+                      
+                      {/* Status steps */}
+                      <div className="relative flex justify-between">
+                        {['reported', 'acknowledged', 'responding', 'resolved', 'closed'].map((status, index) => (
+                          <div key={status} className="flex flex-col items-center">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium z-10 ${
+                              incident.status === status
+                                ? 'bg-primary-500 text-white'
+                                : ['resolved', 'closed'].includes(incident.status) && ['reported', 'acknowledged', 'responding'].includes(status)
+                                ? 'bg-success-500 text-white'
+                                : 'bg-dark-700 text-dark-300'
+                            }`}>
+                              {index + 1}
+                            </div>
+                            <span className="text-xs mt-1 text-dark-300 capitalize text-center max-w-[80px] break-words">
+                              {status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Progress bar fill */}
+                      <div className="absolute top-3 left-0 h-0.5 bg-primary-500 transition-all duration-300"
+                        style={{
+                          width: `${(() => {
+                            const statusIndex = ['reported', 'acknowledged', 'responding', 'resolved', 'closed'].indexOf(incident.status);
+                            return statusIndex >= 0 ? `${(statusIndex / 4) * 100}%` : '0%';
+                          })()}`
+                        }}
+                      ></div>
+                    </div>
+
+                    <p className="text-sm text-dark-300">
+                      Current status: <span className="text-white font-medium capitalize">{incident.status}</span>
                     </p>
                     
-                    <Button
-                      variant={incident.status === 'acknowledged' ? 'primary' : 'secondary'}
-                      fullWidth
-                      className="justify-start"
-                      disabled={incident.status === 'acknowledged' || isLoading}
-                      onClick={() => handleUpdateStatus('acknowledged')}
-                    >
-                      <span className="w-3 h-3 rounded-full bg-info-500 mr-2"></span>
-                      Acknowledge
-                    </Button>
-                    
-                    <Button
-                      variant={incident.status === 'responding' ? 'primary' : 'secondary'}
-                      fullWidth
-                      className="justify-start"
-                      disabled={incident.status === 'responding' || isLoading || incident.status === 'resolved' || incident.status === 'closed'}
-                      onClick={() => handleUpdateStatus('responding')}
-                    >
-                      <span className="w-3 h-3 rounded-full bg-warning-500 mr-2"></span>
-                      Responding
-                    </Button>
-                    
-                    <Button
-                      variant={incident.status === 'resolved' ? 'primary' : 'secondary'}
-                      fullWidth
-                      className="justify-start"
-                      disabled={incident.status === 'resolved' || isLoading || incident.status === 'closed'}
-                      onClick={() => handleUpdateStatus('resolved')}
-                    >
-                      <span className="w-3 h-3 rounded-full bg-success-500 mr-2"></span>
-                      Resolved
-                    </Button>
-                    
-                    <Button
-                      variant={incident.status === 'closed' ? 'primary' : 'secondary'}
-                      fullWidth
-                      className="justify-start"
-                      disabled={incident.status === 'closed' || isLoading}
-                      onClick={() => handleUpdateStatus('closed')}
-                    >
-                      <span className="w-3 h-3 rounded-full bg-dark-500 mr-2"></span>
-                      Close
-                    </Button>
+                    <div className="space-y-2">
+                      <Button
+                        variant={incident.status === 'acknowledged' ? 'primary' : 'secondary'}
+                        fullWidth
+                        className="justify-start"
+                        disabled={['acknowledged', 'responding', 'resolved', 'closed'].includes(incident.status) || isLoading}
+                        onClick={() => handleUpdateStatus('acknowledged')}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-info-500 mr-2"></span>
+                        Acknowledge
+                      </Button>
+                      
+                      <Button
+                        variant={incident.status === 'responding' ? 'primary' : 'secondary'}
+                        fullWidth
+                        className="justify-start"
+                        disabled={['responding', 'resolved', 'closed'].includes(incident.status) || isLoading || incident.status === 'reported'}
+                        onClick={() => handleUpdateStatus('responding')}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-warning-500 mr-2"></span>
+                        Responding
+                      </Button>
+                      
+                      <Button
+                        variant={incident.status === 'resolved' ? 'primary' : 'secondary'}
+                        fullWidth
+                        className="justify-start"
+                        disabled={['resolved', 'closed'].includes(incident.status) || isLoading || ['reported', 'acknowledged'].includes(incident.status)}
+                        onClick={() => handleUpdateStatus('resolved')}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-success-500 mr-2"></span>
+                        Resolved
+                      </Button>
+                      
+                      <Button
+                        variant={incident.status === 'closed' ? 'primary' : 'secondary'}
+                        fullWidth
+                        className="justify-start"
+                        disabled={incident.status === 'closed' || isLoading || incident.status !== 'resolved'}
+                        onClick={() => handleUpdateStatus('closed')}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-dark-500 mr-2"></span>
+                        Close
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               )}
@@ -362,7 +440,7 @@ const IncidentDetail: React.FC = () => {
                     <div className="w-1 bg-primary-500 rounded-full mr-3"></div>
                     <div>
                       <p className="text-sm text-white">Status changed to <strong>{incident.status}</strong></p>
-                      <p className="text-xs text-dark-400">{formatDistanceToNow(new Date(incident.updatedAt), { addSuffix: true })}</p>
+                      <p className="text-xs text-dark-400">{formatDistanceToNow(new Date(incident.updated_at), { addSuffix: true })}</p>
                     </div>
                   </div>
                   
@@ -370,14 +448,14 @@ const IncidentDetail: React.FC = () => {
                     <div className="w-1 bg-dark-500 rounded-full mr-3"></div>
                     <div>
                       <p className="text-sm text-white">Incident reported</p>
-                      <p className="text-xs text-dark-400">{formatDistanceToNow(new Date(incident.reportTime), { addSuffix: true })}</p>
+                      <p className="text-xs text-dark-400">{formatDistanceToNow(new Date(incident.created_at), { addSuffix: true })}</p>
                     </div>
                   </div>
                 </div>
               </Card>
               
-              {/* Add comment functionality for responders */}
-              {isResponder && (
+              {/* Add comment functionality for responders and admins */}
+              {canAddNote && (
                 <Card title="Add Note">
                   <div>
                     <Button
@@ -398,7 +476,7 @@ const IncidentDetail: React.FC = () => {
             <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
               <div className="relative max-w-4xl w-full">
                 <img
-                  src={incident.images[imageIndex]}
+                  src={incident.images[imageIndex].url}
                   alt={`Incident ${imageIndex + 1}`}
                   className="w-full h-auto max-h-[80vh] object-contain"
                 />

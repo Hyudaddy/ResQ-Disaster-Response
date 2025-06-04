@@ -2,21 +2,19 @@ export type UserRole = 'public' | 'responder' | 'admin';
 
 export interface User {
   id: string;
-  name: string;
+  full_name: string;
   email: string;
   role: UserRole;
-  createdAt: string;
-  avatarUrl?: string;
-  department?: string; // For responders
-  jurisdiction?: string; // For responders/admins
-  lastLogin?: string;
+  department?: string | null;
+  jurisdiction?: string | null;
+  avatar_url?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
   isLoading: boolean;
-  error: string | null;
 }
 
 export interface LoginCredentials {

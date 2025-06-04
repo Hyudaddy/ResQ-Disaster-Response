@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BarChart3, PieChart, TrendingUp, Calendar, ArrowDownRight, ArrowUpRight, Clock } from 'lucide-react';
+import { BarChart3, TrendingUp, Calendar, ArrowDownRight, ArrowUpRight, Clock } from 'lucide-react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { Bar, Pie, Line } from 'react-chartjs-2';

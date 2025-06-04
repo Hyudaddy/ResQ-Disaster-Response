@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, Sun, CloudRain, Wind, Thermometer } from 'lucide-react';
+import { Cloud, CloudRain, Wind, Thermometer } from 'lucide-react';
 import Card from './Card';
 
 interface WeatherData {
@@ -11,10 +11,10 @@ interface WeatherData {
 
 const WeatherWidget: React.FC = () => {
   const [weather, setWeather] = useState<WeatherData>({
-    temperature: 28,
-    condition: 'Partly Cloudy',
-    humidity: 75,
-    windSpeed: 12
+    temperature: 25,
+    condition: 'cloudy',
+    humidity: 65,
+    windSpeed: 10
   });
   const [currentTime, setCurrentTime] = useState(new Date());
 

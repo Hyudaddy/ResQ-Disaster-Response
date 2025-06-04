@@ -58,9 +58,13 @@ const Login: React.FC = () => {
         email: formData.email,
         password: formData.password
       });
-      navigate('/');
+      // Add a small delay to ensure the auth state is updated
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
     } catch (error) {
       // Error is handled in the auth context
+      console.error('Login error:', error);
     }
   };
 
@@ -128,16 +132,6 @@ const Login: React.FC = () => {
                 Sign up
               </Link>
             </p>
-          </div>
-          
-          <div className="mt-6 text-center">
-            <div className="text-sm text-light-500 dark:text-dark-400 border-t border-light-200 dark:border-dark-800 pt-4">
-              <p className="mb-1">Demo Accounts:</p>
-              <p className="text-xs">Public: public@example.com</p>
-              <p className="text-xs">Responder: responder@example.com</p>
-              <p className="text-xs">Admin: admin@example.com</p>
-              <p className="text-xs mt-2">(All passwords: "password")</p>
-            </div>
           </div>
         </div>
       </div>

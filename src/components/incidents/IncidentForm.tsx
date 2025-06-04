@@ -1,5 +1,5 @@
 // Updated IncidentForm.tsx with new location fields and map integration
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Camera, X, AlertTriangle, Image } from 'lucide-react';
 import Input from '../common/Input';
@@ -14,6 +14,7 @@ import { useIncidents } from '../../contexts/IncidentContext';
 import { Incident, IncidentType, IncidentSeverity } from '../../types/incident.types';
 import { locationData } from '../../data/locationData';
 import toast from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 interface IncidentFormProps {
   editMode?: boolean;
@@ -32,24 +33,21 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(false);
-  const [images, setImages] = useState<string[]>(incident?.images || []);
-  const [imageUrl, setImageUrl] = useState('');
+  const [images, setImages] = useState<string[]>(incident?.images?.map(img => img.url) || []);
   const [showTerms, setShowTerms] = useState(!editMode);
-  const [selectedMunicipality, setSelectedMunicipality] = useState(incident?.location.municipality || '');
+  const [selectedMunicipality, setSelectedMunicipality] = useState(incident?.location?.municipality || '');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 2;
 
   const [formData, setFormData] = useState({
     title: incident?.title || '',
     description: incident?.description || '',
-    type: incident?.type || 'fire' as IncidentType,
+    type: incident?.type?.name || 'fire' as IncidentType,
     severity: incident?.severity || 'medium' as IncidentSeverity,
-    purok: incident?.location.purok || '',
-    barangay: incident?.location.barangay || '',
-    municipality: incident?.location.municipality || '',
-    locationLatitude: incident?.location.latitude || 0,
-    locationLongitude: incident?.location.longitude || 0,
+    purok: incident?.location?.purok || '',
+    barangay: incident?.location?.barangay || '',
+    municipality: incident?.location?.municipality || '',
+    locationLatitude: incident?.location?.latitude || 0,
+    locationLongitude: incident?.location?.longitude || 0,
   });
 
   // Get user's location
@@ -69,8 +67,8 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
         const { latitude, longitude, accuracy } = position.coords;
         // Validate if coordinates are within reasonable bounds for Agusan del Sur
         const isWithinBounds = 
-          latitude >= 7.5 && latitude <= 9.5 &&
-          longitude >= 125.0 && longitude <= 126.5;
+          latitude >= 7.0 && latitude <= 10.0 &&
+          longitude >= 124.5 && longitude <= 127.0;
         if (!isWithinBounds) {
           toast.error('Detected location seems to be outside Agusan del Sur. Please verify the location.');
         }
@@ -124,6 +122,18 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
   // Get barangays for selected municipality
   const getBarangays = () => {
     return selectedMunicipality ? locationData.barangays[selectedMunicipality as keyof typeof locationData.barangays] || [] : [];
+  };
+
+  // Get incident type ID
+  const getIncidentTypeId = async (typeName: IncidentType) => {
+    const { data, error } = await supabase
+      .from('incident_types')
+      .select('id')
+      .eq('name', typeName)
+      .single();
+
+    if (error) throw error;
+    return data.id;
   };
 
   // Form validation
@@ -185,17 +195,19 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
         await updateIncident(incident.id, {
           title: formData.title,
           description: formData.description,
-          type: formData.type as IncidentType,
+          type_id: incident.type?.id || '',
           severity: formData.severity as IncidentSeverity,
           location: {
+            id: incident.location?.id || '',
             purok: formData.purok,
             barangay: formData.barangay,
             municipality: formData.municipality,
             latitude: formData.locationLatitude,
-            longitude: formData.locationLongitude
+            longitude: formData.locationLongitude,
+            created_at: incident.location?.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
           },
-          images: images.length > 0 ? images : undefined,
-          weatherInfo
+          weather_info: weatherInfo
         });
         
         if (onSuccess) {
@@ -208,25 +220,87 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
           toast.error('You must be logged in to report an incident');
           return;
         }
+
+        // Get the type_id for the selected incident type
+        const type_id = await getIncidentTypeId(formData.type);
         
         const newIncident = await reportIncident({
           title: formData.title,
           description: formData.description,
-          type: formData.type as IncidentType,
+          type_id,
+          type: { 
+            id: type_id, 
+            name: formData.type,
+            description: '',
+            icon: 'alert-circle'
+          },
           severity: formData.severity as IncidentSeverity,
           status: 'reported',
           location: {
+            id: '',  // Will be generated by the database
             purok: formData.purok,
             barangay: formData.barangay,
             municipality: formData.municipality,
             latitude: formData.locationLatitude,
-            longitude: formData.locationLongitude
+            longitude: formData.locationLongitude,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           },
-          reporterId: user.id,
-          reporterName: user.name,
-          images: images.length > 0 ? images : undefined,
-          weatherInfo
+          location_id: '', // Will be set after location creation
+          reporter_id: user.id,
+          reporter: { 
+            id: user.id, 
+            full_name: user.full_name,
+            role: user.role || 'user'
+          },
+          weather_info: weatherInfo
         });
+
+        // Upload images if any
+        if (images.length > 0) {
+          const uploadPromises = images.map(async (imageData) => {
+            // Convert base64 to blob
+            const base64Data = imageData.split(',')[1];
+            const byteCharacters = atob(base64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+              const slice = byteCharacters.slice(offset, offset + 512);
+              const byteNumbers = new Array(slice.length);
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              byteArrays.push(byteArray);
+            }
+            const blob = new Blob(byteArrays, { type: 'image/jpeg' });
+
+            // Upload to Supabase Storage
+            const fileName = `${newIncident.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('incident-images')
+              .upload(fileName, blob);
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+              .from('incident-images')
+              .getPublicUrl(fileName);
+
+            // Save to incident_images table
+            const { error: dbError } = await supabase
+              .from('incident_images')
+              .insert({
+                incident_id: newIncident.id,
+                url: publicUrl,
+                uploaded_by: user.id
+              });
+
+            if (dbError) throw dbError;
+          });
+
+          await Promise.all(uploadPromises);
+        }
         
         navigate(`/incidents/${newIncident.id}`);
       }
@@ -304,14 +378,6 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
                     Location Details
                   </label>
                   <div className="space-y-4">
-                    <Input
-                      name="purok"
-                      value={formData.purok}
-                      onChange={(e) => setFormData(prev => ({ ...prev, purok: e.target.value }))}
-                      placeholder="Enter Purok"
-                      error={formErrors.purok}
-                    />
-                    
                     <Select
                       name="municipality"
                       value={formData.municipality}
@@ -333,6 +399,14 @@ const IncidentForm: React.FC<IncidentFormProps> = ({
                       ]}
                       disabled={!selectedMunicipality}
                       error={formErrors.barangay}
+                    />
+
+                    <Input
+                      name="purok"
+                      value={formData.purok}
+                      onChange={(e) => setFormData(prev => ({ ...prev, purok: e.target.value }))}
+                      placeholder="Enter Purok"
+                      error={formErrors.purok}
                     />
                     
                     <div className="flex gap-3">

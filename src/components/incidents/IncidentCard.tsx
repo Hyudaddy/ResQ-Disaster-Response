@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Incident } from '../../types/incident.types';
+import { IncidentWithDetails } from '../../types/incident.types';
 import Card from '../common/Card';
 import IncidentStatusBadge from '../common/IncidentStatusBadge';
 import IncidentTypeBadge from '../common/IncidentTypeBadge';
@@ -9,7 +9,7 @@ import IncidentSeverityBadge from '../common/IncidentSeverityBadge';
 import { MapPin, Clock, User } from 'lucide-react';
 
 interface IncidentCardProps {
-  incident: Incident;
+  incident: IncidentWithDetails;
   compact?: boolean;
 }
 
@@ -28,8 +28,8 @@ const IncidentCard: IncidentCardComponent = ({ incident, compact = false }) => {
     severity,
     status,
     location,
-    reporterName,
-    reportTime,
+    reporter,
+    created_at,
   } = incident;
 
   return (
@@ -39,41 +39,42 @@ const IncidentCard: IncidentCardComponent = ({ incident, compact = false }) => {
       }`}
     >
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <IncidentTypeBadge type={type} />
           <IncidentStatusBadge status={status} />
         </div>
         
-        <Link to={`/incidents/${id}`} className="block mb-2 hover:text-primary-400 transition-colors">
+        <Link to={`/incidents/${id}`} className="block mb-3 hover:text-primary-400 transition-colors">
           <h3 className="text-lg font-semibold line-clamp-1">{title}</h3>
         </Link>
         
         {!compact && (
-          <p className="text-dark-300 text-sm mb-4 line-clamp-2">{description}</p>
+          <p className="text-dark-300 text-sm mb-4 line-clamp-2 flex-grow">{description}</p>
         )}
         
-        <div className="mt-auto pt-2">
-          <div className="flex items-center text-xs text-dark-400 mb-1.5">
-            <MapPin size={14} className="mr-1" />
+        <div className="mt-auto space-y-2">
+          <div className="flex items-center text-xs text-dark-400">
+            <MapPin size={14} className="mr-1.5 flex-shrink-0" />
             <span className="truncate">
-              {location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+              {location.municipality}, {location.barangay}
+              {location.purok ? `, ${location.purok}` : ''}
             </span>
           </div>
           
-          <div className="flex flex-wrap gap-y-1.5 justify-between">
-            <div className="flex items-center text-xs text-dark-400">
-              <Clock size={14} className="mr-1" />
-              <span>{formatDistanceToNow(new Date(reportTime), { addSuffix: true })}</span>
+          <div className="flex items-center justify-between text-xs text-dark-400">
+            <div className="flex items-center">
+              <Clock size={14} className="mr-1.5 flex-shrink-0" />
+              <span>{formatDistanceToNow(new Date(created_at), { addSuffix: true })}</span>
             </div>
             
-            <div className="flex items-center text-xs text-dark-400">
-              <User size={14} className="mr-1" />
-              <span>{reporterName}</span>
+            <div className="flex items-center">
+              <User size={14} className="mr-1.5 flex-shrink-0" />
+              <span className="truncate">{reporter.full_name}</span>
             </div>
-            
-            <div className="w-full mt-2">
-              <IncidentSeverityBadge severity={severity} />
-            </div>
+          </div>
+          
+          <div className="pt-1">
+            <IncidentSeverityBadge severity={severity} />
           </div>
         </div>
       </div>

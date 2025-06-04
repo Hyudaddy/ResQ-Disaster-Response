@@ -220,12 +220,12 @@ const IncidentFilters: React.FC = () => {
           <div className="pt-4 space-y-6 border-t border-dark-700 animate-fadeIn">
             {/* Incident Types */}
             <div>
-              <h4 className="text-sm font-medium text-dark-200 mb-2">Incident Type</h4>
+              <h4 className="text-sm font-medium text-dark-200 mb-3">Incident Type</h4>
               <div className="flex flex-wrap gap-2">
                 {incidentTypes.map(type => (
                   <button
                     key={type}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       selectedTypes.includes(type)
                         ? getTypeColor(type)
                         : 'bg-dark-800 text-dark-300 border-dark-700 hover:bg-dark-700'
@@ -240,12 +240,12 @@ const IncidentFilters: React.FC = () => {
 
             {/* Severity */}
             <div>
-              <h4 className="text-sm font-medium text-dark-200 mb-2">Severity</h4>
+              <h4 className="text-sm font-medium text-dark-200 mb-3">Severity</h4>
               <div className="flex flex-wrap gap-2">
                 {severityLevels.map(severity => (
                   <button
                     key={severity}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       selectedSeverities.includes(severity)
                         ? getSeverityColor(severity)
                         : 'bg-dark-800 text-dark-300 border-dark-700 hover:bg-dark-700'
@@ -260,12 +260,12 @@ const IncidentFilters: React.FC = () => {
 
             {/* Status */}
             <div>
-              <h4 className="text-sm font-medium text-dark-200 mb-2">Status</h4>
+              <h4 className="text-sm font-medium text-dark-200 mb-3">Status</h4>
               <div className="flex flex-wrap gap-2">
                 {statusOptions.map(status => (
                   <button
                     key={status}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       selectedStatuses.includes(status)
                         ? getStatusColor(status)
                         : 'bg-dark-800 text-dark-300 border-dark-700 hover:bg-dark-700'
@@ -279,38 +279,41 @@ const IncidentFilters: React.FC = () => {
             </div>
 
             {/* Date Range */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-medium text-dark-200 mb-2">From Date</h4>
-                <Input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="mb-0"
-                />
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-dark-200 mb-2">To Date</h4>
-                <Input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="mb-0"
-                />
+            <div>
+              <h4 className="text-sm font-medium text-dark-200 mb-3">Date Range</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-dark-300 mb-1.5">From</label>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-dark-800 border border-dark-700 rounded-md text-sm text-white focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-dark-300 mb-1.5">To</label>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-dark-800 border border-dark-700 rounded-md text-sm text-white focus:outline-none focus:border-primary-500"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end space-x-3 pt-4 border-t border-dark-700">
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-2">
               <Button
                 variant="ghost"
-                size="sm"
                 onClick={clearFilters}
+                className="text-dark-300 hover:text-white"
               >
                 Clear All
               </Button>
               <Button
-                size="sm"
+                variant="primary"
                 onClick={applyFilters}
               >
                 Apply Filters

@@ -17,6 +17,7 @@ import Dashboard from './pages/dashboard/Dashboard';
 import IncidentReport from './pages/incidents/IncidentReport';
 import IncidentsList from './pages/incidents/IncidentsList';
 import IncidentDetail from './pages/incidents/IncidentDetail';
+import TestSupabase from './pages/TestSupabase';
 
 // Responder pages
 import ResponderAlerts from './pages/responder/ResponderAlerts';
@@ -26,13 +27,14 @@ import ResponderReports from './pages/responder/ResponderReports';
 import UserManagement from './pages/admin/UserManagement';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
+import Profile from './pages/profile/Profile';
 
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <IncidentProvider>
-          <Router>
+      <Router>
+        <AuthProvider>
+          <IncidentProvider>
             <Routes>
               {/* Auth routes with AuthLayout */}
               <Route element={<AuthLayout />}>
@@ -47,6 +49,7 @@ function App() {
                 <Route path="/incidents/report" element={<PrivateRoute element={<IncidentReport />} />} />
                 <Route path="/incidents" element={<PrivateRoute element={<IncidentsList />} />} />
                 <Route path="/incidents/:id" element={<PrivateRoute element={<IncidentDetail />} />} />
+                <Route path="/test" element={<TestSupabase />} />
                 
                 {/* Responder routes */}
                 <Route 
@@ -81,14 +84,15 @@ function App() {
                   path="/admin/settings"
                   element={<RoleRoute roles={['admin']} element={<Settings />} />}
                 />
+                <Route path="/profile" element={<PrivateRoute element={<Profile />} />} />
               </Route>
               
               {/* Fallback route */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </Router>
-        </IncidentProvider>
-      </AuthProvider>
+          </IncidentProvider>
+        </AuthProvider>
+      </Router>
     </ThemeProvider>
   );
 }

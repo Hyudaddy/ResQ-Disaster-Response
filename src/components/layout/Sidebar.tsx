@@ -18,6 +18,7 @@ import {
   X,
   Sun,
   Moon,
+  ChevronDown,
 } from 'lucide-react';
 import Button from '../common/Button';
 import { ShieldAlert } from 'lucide-react';
@@ -40,6 +41,7 @@ const Sidebar: React.FC = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const navSections: NavSection[] = [
     {
@@ -113,6 +115,14 @@ const Sidebar: React.FC = () => {
 
   const toggleMobileSidebar = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  const toggleProfile = () => {
+    setIsProfileOpen(!isProfileOpen);
   };
 
   if (!user) return null;
@@ -218,14 +228,26 @@ const Sidebar: React.FC = () => {
           {/* User area */}
           <div className={`p-4 border-t border-light-200 dark:border-dark-800 ${collapsed ? 'items-center' : ''}`}>
             {!collapsed && (
-              <div className="flex items-center mb-3">
-                <div className="bg-light-100 dark:bg-dark-700 text-light-500 dark:text-dark-300 h-8 w-8 rounded-full flex items-center justify-center">
-                  <UserCircle size={20} />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-light-900 dark:text-dark-100 truncate max-w-[180px]">{user.name}</p>
-                  <p className="text-xs text-light-500 dark:text-dark-400 capitalize">{user.role}</p>
-                </div>
+              <div className="relative mb-4">
+                <Link
+                  to="/profile"
+                  className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-light-100 dark:hover:bg-dark-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 rounded-full bg-primary-500 text-white flex items-center justify-center">
+                      {user.full_name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="ml-3 text-left">
+                      <p className="text-sm font-medium text-light-900 dark:text-white">
+                        {user.full_name}
+                      </p>
+                      <p className="text-xs text-light-500 dark:text-dark-400">
+                        {user.role}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-light-500 dark:text-dark-400" />
+                </Link>
               </div>
             )}
 
@@ -243,11 +265,11 @@ const Sidebar: React.FC = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                className={`${collapsed ? 'p-2 w-auto justify-center' : 'w-full'} border border-light-200 dark:border-dark-700`}
-                onClick={logout}
+                className={`${collapsed ? 'p-2 w-auto justify-center' : 'w-full'} text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20`}
+                onClick={handleLogout}
                 leftIcon={collapsed ? undefined : <LogOut size={16} />}
               >
-                {collapsed ? <LogOut size={16} /> : 'Logout'}
+                {collapsed ? <LogOut size={16} /> : 'Sign Out'}
               </Button>
             </div>
           </div>

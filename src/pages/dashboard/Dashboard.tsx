@@ -5,8 +5,6 @@ import {
   ShieldAlert, 
   CheckCircle, 
   Clock, 
-  Flame, 
-  Droplet, 
   Activity
 } from 'lucide-react';
 import Card from '../../components/common/Card';
@@ -14,7 +12,6 @@ import Button from '../../components/common/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIncidents } from '../../contexts/IncidentContext';
 import IncidentCard from '../../components/incidents/IncidentCard';
-import { getIncidentStats, getIncidentTypeDistribution, getRecentIncidents } from '../../data/mockData';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 
@@ -24,25 +21,39 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { incidents } = useIncidents();
-  const stats = getIncidentStats();
-  const recentIncidents = getRecentIncidents(3);
-  const typeDistribution = getIncidentTypeDistribution();
+
+  // Calculate stats from incidents
+  const stats = {
+    total: incidents.length,
+    active: incidents.filter(i => i.status === 'reported' || i.status === 'responding').length,
+    resolved: incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length,
+    critical: incidents.filter(i => i.severity === 'critical').length,
+  };
+
+  // Get recent incidents (last 3)
+  const recentIncidents = [...incidents]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 3);
+
+  // Incident type distribution
+  const typeLabels = ['Fire', 'Flood', 'Earthquake', 'Storm', 'Medical', 'Infrastructure', 'Other'];
+  const typeDistribution = typeLabels.map(type =>
+    incidents.filter(i => i.type.name.toLowerCase() === type.toLowerCase()).length
+  );
 
   // Format data for doughnut chart
   const doughnutData = {
-    labels: Object.keys(typeDistribution).map(type => 
-      type.charAt(0).toUpperCase() + type.slice(1)
-    ),
+    labels: typeLabels,
     datasets: [
       {
-        data: Object.values(typeDistribution),
+        data: typeDistribution,
         backgroundColor: [
           '#ef4444', // fire (red)
           '#3b82f6', // flood (blue)
           '#f59e0b', // earthquake (amber)
           '#6366f1', // storm (indigo)
-          '#ec4899', // medical (pink)
-          '#f97316', // infrastructure (orange)
+          '#10b981', // medical (green)
+          '#8b5cf6', // infrastructure (purple)
           '#6b7280', // other (gray)
         ],
         borderWidth: 0,
@@ -70,7 +81,7 @@ const Dashboard: React.FC = () => {
           dayEnd.setHours(23, 59, 59, 999);
           
           return incidents.filter(incident => {
-            const reportDate = new Date(incident.reportTime);
+            const reportDate = new Date(incident.created_at);
             return reportDate >= dayStart && reportDate <= dayEnd;
           }).length;
         }),
@@ -129,7 +140,7 @@ const Dashboard: React.FC = () => {
     <div className="animate-fadeIn">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white mb-2">
-          Welcome, {user?.name}
+          Welcome, {user?.full_name || user?.email?.split('@')[0] || 'User'}
         </h1>
         <p className="text-dark-300">Dashboard overview and recent incidents</p>
       </div>
