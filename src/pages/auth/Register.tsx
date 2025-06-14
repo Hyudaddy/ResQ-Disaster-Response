@@ -42,7 +42,7 @@ const municipalityOptions = [
 const Register: React.FC = () => {
   const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState<UserRole>('public');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('citizen');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -82,7 +82,7 @@ const Register: React.FC = () => {
       valid = false;
     }
     
-    if (!formData.email) {
+    if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
       valid = false;
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
@@ -98,25 +98,28 @@ const Register: React.FC = () => {
       valid = false;
     }
     
-    if (formData.password !== formData.confirmPassword) {
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Password confirmation is required';
+      valid = false;
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
       valid = false;
     }
 
     if (selectedRole === 'responder') {
+      if (!formData.responderCode.trim()) {
+        newErrors.responderCode = 'Responder code is required';
+        valid = false;
+      } else if (formData.responderCode !== 'RESPONDER123') { // Example responder code
+        newErrors.responderCode = 'Invalid responder code';
+        valid = false;
+      }
       if (!formData.department) {
         newErrors.department = 'Department is required for responders';
         valid = false;
       }
       if (!formData.jurisdiction) {
         newErrors.jurisdiction = 'Jurisdiction is required for responders';
-        valid = false;
-      }
-      if (!formData.responderCode.trim()) {
-        newErrors.responderCode = 'Responder code is required';
-        valid = false;
-      } else if (formData.responderCode !== 'RESP123') { // Example responder code
-        newErrors.responderCode = 'Invalid responder code';
         valid = false;
       }
     }
@@ -163,7 +166,6 @@ const Register: React.FC = () => {
     } catch (error) {
       // Error is handled and possibly toasted in the auth context
       console.error('Registration error handled by AuthContext:', error);
-      // Optionally, you could add additional error handling specific to the form here if needed
     }
   };
 
@@ -193,18 +195,18 @@ const Register: React.FC = () => {
             <label className="block text-sm font-medium text-light-700 dark:text-dark-200 mb-2">
               I want to register as:
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-4 mb-6">
               <button
                 type="button"
                 className={`p-3 rounded-lg border text-center transition-colors ${
-                  selectedRole === 'public'
+                  selectedRole === 'citizen'
                     ? 'bg-primary-500/20 border-primary-500 text-primary-500'
                     : 'border-light-200 dark:border-dark-700 text-light-600 dark:text-dark-300 hover:border-light-300 dark:hover:border-dark-600'
                 }`}
-                onClick={() => setSelectedRole('public')}
+                onClick={() => setSelectedRole('citizen')}
               >
                 <User size={20} className="mx-auto mb-1" />
-                <span className="text-sm">Public User</span>
+                <span className="text-sm">Citizen</span>
               </button>
               
               <button

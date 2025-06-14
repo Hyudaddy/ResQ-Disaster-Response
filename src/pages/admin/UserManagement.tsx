@@ -5,15 +5,30 @@ import { User } from '../../types/auth.types';
 import Button from '../../components/common/Button';
 import { Trash2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import UserForm from '../../components/auth/UserForm';
+import Modal from '../../components/common/Modal';
 
 const UserManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    if (user?.role !== 'admin') {
+      navigate('/dashboard');
+      return;
+    }
+
     fetchUsers();
-  }, []);
+  }, [isAuthenticated, user, navigate]);
 
   const fetchUsers = async () => {
     try {
@@ -25,14 +40,14 @@ const UserManagement: React.FC = () => {
 
       if (error) throw error;
 
-      // Get current user's email
-      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
+      // Get current user's email from the session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
 
       // Add email to the current user's profile
       const usersWithEmail = data.map(profile => ({
         ...profile,
-        email: currentUser && profile.id === currentUser.id ? currentUser.email : 'N/A'
+        email: session?.user && profile.id === session.user.id ? session.user.email : 'N/A'
       }));
 
       setUsers(usersWithEmail);
@@ -45,29 +60,31 @@ const UserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+    if (!confirm(
+      'Are you sure you want to delete this user? This will also delete all incidents and related data created by this user. This action cannot be undone.'
+    )) {
       return;
     }
 
     try {
-      // Delete from profiles first
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
+      // Call our database function to delete the user
+      const { error } = await supabase
+        .rpc('delete_user', { user_id: userId });
 
-      if (profileError) throw profileError;
+      if (error) throw error;
 
-      // Then delete from auth
-      const { error: authError } = await supabase.auth.signOut();
-      if (authError) throw authError;
-
-      toast.success('User deleted successfully');
+      toast.success('User and all related data deleted successfully');
       fetchUsers(); // Refresh the list
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error('Failed to delete user');
+      toast.error('Failed to delete user. Please try again.');
     }
+  };
+
+  const handleAddUserSuccess = () => {
+    setIsAddUserModalOpen(false);
+    fetchUsers();
+    toast.success('User added successfully');
   };
 
   if (!user || user.role !== 'admin') {
@@ -85,7 +102,7 @@ const UserManagement: React.FC = () => {
         <Button
           variant="primary"
           leftIcon={<UserPlus size={16} />}
-          onClick={() => {/* TODO: Implement add user modal */}}
+          onClick={() => setIsAddUserModalOpen(true)}
         >
           Add User
         </Button>
@@ -121,7 +138,7 @@ const UserManagement: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-light-200 dark:divide-dark-800">
+              <tbody>
                 {users.map((user) => (
                   <tr key={user.id} className="hover:bg-light-50 dark:hover:bg-dark-800">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -174,6 +191,18 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+        title="Add New User"
+      >
+        <UserForm
+          isModal={true}
+          onSuccess={handleAddUserSuccess}
+          onCancel={() => setIsAddUserModalOpen(false)}
+        />
+      </Modal>
     </div>
   );
 };

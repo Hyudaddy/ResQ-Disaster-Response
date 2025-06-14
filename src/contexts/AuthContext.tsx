@@ -104,13 +104,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       
+      // First check if the email already exists
+      const { data: existingUser, error: checkError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', credentials.email)
+        .single();
+
+      if (existingUser) {
+        toast.error('An account with this email already exists. Please sign in instead.');
+        navigate('/login');
+        return;
+      }
+      
       // Proceed with registration
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: credentials.email,
         password: credentials.password,
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        if (signUpError.message.includes('User already registered')) {
+          toast.error('An account with this email already exists. Please sign in instead.');
+          navigate('/login');
+          return;
+        }
+        throw signUpError;
+      }
 
       if (!data.user) {
         throw new Error('No user data returned from sign up');
@@ -122,50 +142,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         full_name: credentials.name,
         email: credentials.email,
         role: credentials.role,
-        department: credentials.role === 'public' ? null : credentials.department || null,
-        jurisdiction: credentials.role === 'public' ? null : credentials.jurisdiction || null,
+        department: credentials.role === 'citizen' ? null : credentials.department || null,
+        jurisdiction: credentials.role === 'citizen' ? null : credentials.jurisdiction || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
+      // Create the profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .insert([newProfileData])
-        .select(); // Select the inserted data to get default values if any
+        .select()
+        .single();
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
-        // Consider rollback: delete the auth user if profile creation fails critically
-        // await supabase.auth.admin.deleteUser(data.user.id); // Requires admin key
+        // Attempt to delete the auth user if profile creation fails
+        await supabase.auth.admin.deleteUser(data.user.id);
         throw profileError;
       }
 
-      if (profileData && profileData.length > 0) {
-         setUser(profileData[0] as User);
-         toast.success('Registration successful!');
-         navigate('/dashboard', { replace: true });
+      if (profileData) {
+        // Set the user state
+        setUser(profileData as User);
+        toast.success('Registration successful!');
+        
+        // Wait for state to update before navigation
+        await new Promise(resolve => setTimeout(resolve, 500));
+        navigate('/dashboard', { replace: true });
       } else {
-         // This case should ideally not happen if insert is successful
-         console.error('Profile creation successful but no data returned.', newProfileData);
-         toast.error('Registration successful, but failed to load profile.');
-         // Optionally navigate or stay on a loading/error page
-         // navigate('/error');
+        throw new Error('Failed to create profile');
       }
-
     } catch (error: any) {
       console.error('Error registering:', error);
       // Improved error messages
       if (error.message.includes('duplicate key value violates unique constraint')) {
-         toast.error('An account with this email already exists. Please sign in instead.');
+        toast.error('An account with this email already exists. Please sign in instead.');
+        navigate('/login');
       } else if (error.message.includes('violates foreign key constraint')) {
-         toast.error('Invalid department or jurisdiction selected.');
+        toast.error('Invalid department or jurisdiction selected.');
       } else if (error.message.includes('violates check constraint')) {
-         toast.error('Invalid data provided for profile fields.');
-      } else if (error.message.includes('User already registered')) { // Specific Supabase auth error
-         toast.error('An account with this email already exists. Please sign in instead.');
+        toast.error('Invalid data provided for profile fields.');
       } else {
         toast.error(error.message || 'Failed to register');
       }
-      // No need to rethrow if handled with toast
-      // throw error; 
     } finally {
       setIsLoading(false);
     }

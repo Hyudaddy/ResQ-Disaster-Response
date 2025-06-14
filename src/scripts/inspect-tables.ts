@@ -1,40 +1,49 @@
-import { supabase } from '../lib/supabase';
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = 'https://zovxsfyvhaexrzeuacna.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdnhzZnl2aGFleHJ6ZXVhY25hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgxNjcyOTksImV4cCI6MjA2Mzc0MzI5OX0.qjS8lzLjEQvPd0ED8yWCN6uKZ7A8QTxzHu-fplPrWPA'
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 async function inspectTables() {
   try {
     console.log('Inspecting Supabase tables...\n');
 
-    // Get all tables
-    const { data: tables, error: tablesError } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public');
+    // List of tables to check
+    const tables = [
+      'profiles',
+      'incident_types',
+      'locations',
+      'incidents',
+      'incident_images',
+      'incident_responders',
+      'resources',
+      'incident_resources'
+    ];
 
-    if (tablesError) {
-      console.error('Error getting tables:', tablesError);
-      return;
-    }
-
-    console.log('Available tables:');
-    for (const table of tables) {
-      console.log(`\nInspecting table: ${table.table_name}`);
+    for (const tableName of tables) {
+      console.log(`\nInspecting table: ${tableName}`);
       
-      // Get columns for each table
-      const { data: columns, error: columnsError } = await supabase
-        .from('information_schema.columns')
-        .select('column_name, data_type, is_nullable')
-        .eq('table_schema', 'public')
-        .eq('table_name', table.table_name);
+      // Try to get a single row to check if table exists and get its structure
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .limit(1);
 
-      if (columnsError) {
-        console.error(`Error getting columns for ${table.table_name}:`, columnsError);
+      if (error) {
+        console.log(`Table ${tableName} does not exist or is not accessible`);
         continue;
       }
 
-      console.log('Columns:');
-      columns.forEach(column => {
-        console.log(`- ${column.column_name} (${column.data_type}, ${column.is_nullable === 'YES' ? 'nullable' : 'not null'})`);
-      });
+      if (data && data.length > 0) {
+        const columns = Object.keys(data[0]);
+        console.log('Columns:');
+        columns.forEach(column => {
+          console.log(`- ${column}`);
+        });
+      } else {
+        console.log('Table exists but is empty');
+      }
     }
 
   } catch (error) {
