@@ -3,11 +3,24 @@ import { FileText, Download, Filter, Calendar, AlertTriangle } from 'lucide-reac
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { useIncidents } from '../../contexts/IncidentContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Incident } from '../../types/incident.types';
 import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// Extend jsPDF type to include lastAutoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    lastAutoTable: {
+      finalY: number;
+    };
+  }
+}
 
 const ResponderReports: React.FC = () => {
   const { incidents } = useIncidents();
+  const { user } = useAuth();
   
   // Resolved incidents for reports
   const resolvedIncidents = incidents.filter(
@@ -16,12 +29,235 @@ const ResponderReports: React.FC = () => {
   
   // Generate a weekly report
   const generateWeeklyReport = () => {
+    if (user?.role !== 'admin') {
+      toast.error('Only administrators can generate reports');
+      return;
+    }
     toast.success('Weekly report generated');
   };
   
   // Generate incident response report
   const generateIncidentReport = (incidentId: string) => {
-    toast.success(`Report generated for incident #${incidentId}`);
+    if (user?.role !== 'admin') {
+      toast.error('Only administrators can generate reports');
+      return;
+    }
+
+    const incident = incidents.find(i => i.id === incidentId);
+    if (!incident) {
+      toast.error('Incident not found');
+      return;
+    }
+
+    // Create new PDF document with A4 size
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Set margins and page dimensions
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    // Add header
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ResQ', pageWidth / 2, 25, { align: 'center' });
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Disaster and Incident Response System', pageWidth / 2, 35, { align: 'center' });
+    
+    // Add a line separator
+    doc.setDrawColor(0, 0, 0);
+    doc.line(margin, 40, pageWidth - margin, 40);
+    
+    // Reset text color to black for content
+    doc.setTextColor(0, 0, 0);
+    
+    // Add incident details
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Incident Response Report', margin, 50);
+    
+    // Add incident ID and date
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Report ID: #${incident.id}`, margin, 57);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 63);
+    
+    // Add incident details
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Incident Details', margin, 72);
+    
+    // Create table with incident information
+    autoTable(doc, {
+      startY: 75,
+      head: [['Field', 'Value']],
+      body: [
+        ['Title', incident.title],
+        ['Type', incident.type?.name || 'Unknown'],
+        ['Status', incident.status.charAt(0).toUpperCase() + incident.status.slice(1)],
+        ['Severity', incident.severity.charAt(0).toUpperCase() + incident.severity.slice(1)],
+        ['Reported By', incident.reporter?.full_name || 'Unknown'],
+        ['Reported Date', new Date(incident.created_at).toLocaleString()],
+        ['Resolved Date', incident.resolved_at ? new Date(incident.resolved_at).toLocaleString() : 'N/A'],
+        ['Location', `${incident.location?.municipality || ''}, ${incident.location?.barangay || ''}${incident.location?.purok ? `, ${incident.location.purok}` : ''}`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      styles: { 
+        fontSize: 9,
+        cellPadding: 3,
+        overflow: 'linebreak',
+        cellWidth: 'wrap'
+      },
+      margin: { left: margin, right: margin },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        1: { cellWidth: 'auto' }
+      }
+    });
+
+    // Add description section
+    if (incident.description) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Description', margin, doc.lastAutoTable.finalY + 8);
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        body: [[incident.description]],
+        theme: 'grid',
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          cellWidth: 'wrap'
+        },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    // Add responders section if available
+    if (incident.responders && incident.responders.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Responders', margin, doc.lastAutoTable.finalY + 8);
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        head: [['Name', 'Role', 'Status', 'Assigned At']],
+        body: incident.responders.map(r => [
+          r.responder.full_name,
+          r.responder.role,
+          r.status.charAt(0).toUpperCase() + r.status.slice(1),
+          new Date(r.assigned_at).toLocaleString()
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          cellWidth: 'wrap'
+        },
+        margin: { left: margin, right: margin },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 'auto' }
+        }
+      });
+    }
+
+    // Add resources section if available
+    if (incident.resources && incident.resources.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Resources Deployed', margin, doc.lastAutoTable.finalY + 8);
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        head: [['Name', 'Type', 'Status', 'Assigned At']],
+        body: incident.resources.map(r => [
+          r.resource.name,
+          r.resource.type,
+          r.status.charAt(0).toUpperCase() + r.status.slice(1),
+          new Date(r.assigned_at).toLocaleString()
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          cellWidth: 'wrap'
+        },
+        margin: { left: margin, right: margin },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 'auto' }
+        }
+      });
+    }
+
+    // Add weather information if available
+    if (incident.weather_info) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Weather Conditions', margin, doc.lastAutoTable.finalY + 8);
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        head: [['Condition', 'Value']],
+        body: [
+          ['Temperature', `${incident.weather_info.temperature}°C`],
+          ['Weather', incident.weather_info.condition],
+          ['Humidity', `${incident.weather_info.humidity}%`],
+          ['Wind Speed', `${incident.weather_info.windSpeed} km/h`],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { 
+          fontSize: 9,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          cellWidth: 'wrap'
+        },
+        margin: { left: margin, right: margin },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 'auto' }
+        }
+      });
+    }
+
+    // Add signature section at the bottom of the page
+    const signatureY = pageHeight - 40; // 40mm from bottom
+    doc.setDrawColor(0, 0, 0);
+    doc.line(margin, signatureY, margin + 50, signatureY);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Authorized by:', margin, signatureY + 8);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(user.full_name, margin, signatureY + 15);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Administrator', margin, signatureY + 22);
+
+    // Save the PDF
+    doc.save(`Incident_Report_${incident.id}.pdf`);
+    toast.success('Report downloaded successfully');
   };
   
   // Calculate response times
@@ -138,7 +374,7 @@ const ResponderReports: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-dark-800">
-            {resolvedIncidents.slice(0, 10).map((incident) => (
+            {resolvedIncidents.slice(0, 10).map(incident => (
               <tr key={incident.id} className="bg-dark-900 hover:bg-dark-800 transition">
                 <td className="px-4 py-3 text-white">#{incident.id}</td>
                 <td className="px-4 py-3 text-white">{incident.title}</td>
